@@ -8,7 +8,7 @@ import numpy as np
 import torch
 
 # environment
-from custom_minigrid import CustomMinigridEnv
+# from custom_minigrid import CustomMinigridEnv
 
 # ray rllib
 import ray

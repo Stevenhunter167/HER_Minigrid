@@ -6,12 +6,13 @@ class SamplingStrategy:
     """ Defines the sampling strategy for Hindsight Experience Replay """
 
     def __init__(self, policy, sample_batch):
+        self.policy = policy
         self.sample_batch = sample_batch # original trajectory
         self.buffer_size = policy.config['buffer_size']
         self.aug_eps_id = sample_batch['eps_id']
     
     def sample_strategy(self, original_traj):
-        return NotImplementedError()
+        raise NotImplementedError("Implement this method in subclass")
 
     def sample_trajectory(self):
         # create a copy of sampled trajectory
@@ -31,13 +32,13 @@ def build_DQN_HER_postprocess_fn(SamplingStrategy):
         """
         
         # Hindsight Experience Replay trajectory augmentation
-        if type(sample_batch) is SampleBatch:
+        if type(sample_batch) is SampleBatch and policy.config['use_HER'] and sample_batch['obs'].shape[0] > 0:
             # init list of new trajectories
             augmented_trajs = [sample_batch]
             # init HER sampling strategy
             her_sampler = SamplingStrategy(policy, sample_batch)
             # sample n new trajectories using sampling strategy
-            for i in range(policy.config['num_her_traj']):
+            for i in range(policy.config['num_HER_traj']):
                 augmented_trajs.append(her_sampler.sample_trajectory())
             # concatenate sampled trajectories
             sample_batch = SampleBatch.concat_samples(augmented_trajs)

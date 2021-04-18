@@ -48,26 +48,87 @@ class CustomMinigridEnv(Env):
         return (obs), reward, done, info
 
 
+# custom minigrid env: random goal
+from gym_minigrid.envs.empty import EmptyEnv, Goal, Grid
+class EmptyEnvRandGoal(EmptyEnv):
+    def __init__(self, **kwargs):
+        super().__init__(agent_start_pos=(1,1), **kwargs)
+    def _gen_grid(self, width, height):
+        # Create an empty grid
+        self.grid = Grid(width, height)
+        # Generate the surrounding walls
+        self.grid.wall_rect(0, 0, width, height)
+        # Place a goal square in random location
+        self.goal_pos = (
+            np.random.randint(1, self.width-1),
+            np.random.randint(1, self.height-1)
+        )
+        while self.goal_pos == (1,1):
+            self.goal_pos = (
+                np.random.randint(1, self.width-1),
+                np.random.randint(1, self.height-1)
+            )
+        self.put_obj(
+            Goal(), 
+            *self.goal_pos
+        )
+        # Place the agent
+        if self.agent_start_pos is not None:
+            self.agent_pos = self.agent_start_pos
+            self.agent_dir = self.agent_start_dir
+        else:
+            self.place_agent()
+        self.mission = "get to the green goal square"
+
+
+class CustomRGBMinigrid(EmptyEnvRandGoal):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.base_env = RGBImgObsWrapper(self)
+    def reset(self):
+        return self.base_env.reset()['image']
+    def step(self, action):
+        obs, reward, done, info = self.base_env.step(action)
+        return obs['image'], reward, done, info
+
+
+# onehot full obs wrapper
 class CustomOneHotMinigridEnv(Env):
     def __init__(self, env_config):
         super().__init__()
-        self.env = ImgObsWrapper(FullyObsWrapper(gym.make('MiniGrid-Empty-Random-6x6-v0')))
-        self.action_space = self.env.action_space
+        # self.base_env = gym.make('MiniGrid-Empty-Random-6x6-v0')
+        self.base_env = EmptyEnvRandGoal(size=16)
+        self.env = ImgObsWrapper(FullyObsWrapper(self.base_env))
+        self.action_space = spaces.Discrete(3)
         self.observation_space = spaces.Box(low=0, high=1, shape=
                     (self.env.observation_space.shape[0], 
                      self.env.observation_space.shape[1], 
-                     21), dtype=np.float)
+                     6),
+                     dtype=np.float)
         self.settingslist = [11, 6, 4]
     def reset(self):
         # Place a goal square in the bottom-right corner fullonehot2dfullonehot2d
-        return fullonehot2d(self.env.reset(), self.settingslist)
+        obs = fullonehot2d(self.env.reset(), self.settingslist)
+        obs = np.concatenate([obs[:,:,8:9], obs[:,:,10:11], obs[:,:,17:21]], axis=2)
+        self.goal = obs[:,:,0:1]
+        # print(self.goal.shape)
+        return obs
+    def render(self):
+        self.env.render()
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
-        return fullonehot2d(obs, self.settingslist), reward, done, info
+        obs = fullonehot2d(obs, self.settingslist)
+        if np.sum(obs[:,:,18:21]) == 0: 
+            obs[:,:,17] = obs[:,:,10]
+        else: 
+            obs[:,:,17] = obs[:,:,17] * 0
+        obs = np.concatenate([self.goal, obs[:,:,10:11], obs[:,:,17:21]], axis=2)
+        return obs, reward, done, info
 
 if __name__ == '__main__':
 
-    env = CustomMinigridEnv(None)
+    env = CustomOneHotMinigridEnv(None)
+    # env = FullyObsWrapper(EmptyEnvRandGoal(size=4))#ImgObsWrapper
     obs = env.reset()
     done = False
 
@@ -83,14 +144,23 @@ if __name__ == '__main__':
     #     env.reset()
         # env.env.render()
         
-
+    import code
+    import matplotlib.pyplot as plt
     while not done:
         print(type(obs))
         print(obs)
+
+        print("agent\n", obs[:,:,1])
+        print("goal \n", obs[:,:,0])
+
         # print(obs[:,:,10] + obs[:,:,8])
         print(env.observation_space)
-        # env.env.render()
+        env.render()
+        # img=obs['image']
+        code.interact(local=locals())
         action = env.action_space.sample()
         print(action)
         obs, reward, done, info = env.step(action)
         print("reward", reward)
+    print("agent\n", obs[:,:,1])
+    print("goal \n", obs[:,:,0])
